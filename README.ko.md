@@ -21,11 +21,12 @@ HTML + CSS + ES 모듈 자바스크립트로 만들었고, GitHub Pages 에 그�
 
 ## 🤖 AI 기능 (API 연동)
 
-앱의 실제 숙소·테마 데이터를 재사용하는 AI 기능 3종을 UI 에 연결했습니다:
+앱의 실제 숙소·테마 데이터를 재사용하는 AI 기능 4종을 UI 에 연결했습니다:
 
 1. **AI 여행 컨시어지 챗봇** (`#/ai`) — 지역·분위기·예산으로 숙소 추천.
 2. **테마 추천** (`#/ai`) — 여행 성향을 6개 테마 중 하나로 매칭.
 3. **주변 여행 코스 생성** (숙소 상세 페이지) — 선택한 숙소 기준 1일 여행 코스 생성.
+4. **🗓️ 이번 주말 추천 (무인 자동)** — 홈 화면을 열면 다가오는 주말에 어울리는 테마·숙소를 자동 생성(오프라인 mock 에서도 동작).
 
 **데모 = mock (기본값).** `ai/config.js` 의 `AI_ENDPOINT` 가 비어 있으면, 프론트가 브라우저 안에서
 결정론적 한국어 MockProvider 로 답합니다 — 네트워크·API 키 전혀 없음. 별도 설정 없이 AI 가 바로 동작합니다.
@@ -45,12 +46,40 @@ npm run dev                 # http://localhost:8787 실행
 export const AI_ENDPOINT = "http://localhost:8787/api/ai";
 ```
 
-프록시는 모델 **`claude-opus-5`** (`messages.stream`, `max_tokens: 2048`,
-`thinking: { type: "adaptive" }`) 로 호출하고 응답을 스트리밍합니다.
+프록시는 **비용 우선 기본 모델 `claude-haiku-4-5`** (`AI_MODEL` 로 상향 가능)로 호출하고 응답을
+스트리밍하며, prompt caching·출력 상한·월 토큰 예산을 적용합니다. 자세한 비용 모델은 아래 고도화 섹션 참고.
 
-> **🔒 API 키는 서버에서만.** `ANTHROPIC_API_KEY` 는 **오직** `server/` 백엔드(환경변수)에만 두며,
-> 브라우저·프론트엔드·저장소에는 **절대** 넣지 않습니다. `.env` 는 git 제외 처리되고, CI 는 서버를
-> 설치·실행하지 않습니다. 프록시가 존재하는 이유가 바로 이것입니다.
+> **🔒 API keys are server-side only — never in the browser or repo.** `ANTHROPIC_API_KEY` 는
+> **오직** `server/` 백엔드(환경변수) 또는 Cloudflare Worker 시크릿에만 두며, 브라우저·프론트엔드·저장소에는
+> **절대** 넣지 않습니다. `.env` 는 git 제외 처리되고, CI 는 서버를 설치·실행하지 않습니다. 프록시가 존재하는 이유가 바로 이것입니다.
+
+## ⚙️ 고도화 — 무인·저비용 실 AI 연동
+
+실 AI 경로를 **저비용**·**무인(unmanned)** 으로 끌어올린 고도화입니다.
+
+**비용 모델.** 기본 모델 **`claude-haiku-4-5`**, **$1 / $5 per MTok**(입력/출력). 품질이 필요하면
+`AI_MODEL` 을 `claude-sonnet-5`·`claude-opus-5` 로 상향. 태스크별 안정적 시스템 프롬프트를
+`cache_control:{type:'ephemeral'}` 블록으로 보내 반복 호출이 캐시를 읽어 비용을 줄입니다. 태스크별
+`max_tokens` 는 modest(~700). 월 토큰 예산(`AI_MONTHLY_TOKEN_CAP`, 기본 200만) + IP 당 분당
+요청 제한(기본 20)으로 지출을 방어하고, 초과 시 HTTP 429 `{fallback:true}` 를 반환합니다.
+
+**대략 비용.** Haiku 4.5 기준 요청 1건(입력 ~2K + 출력 ~0.5K 토큰) ≈ **$0.0045**, 즉 캐싱 할인 전
+**1,000 요청당 약 $4–5**. mock 경로는 **$0**. 기본 월 200만 토큰 상한으로 폭주가 예산을 놀래킬 일이 없습니다.
+
+**무료 원-디플로이 (Cloudflare Workers, 무인).** `server/worker.js` + `server/wrangler.toml` 이
+Anthropic REST API 를 동일한 태스크 라우팅·모델·캐싱 규칙으로 호출합니다 — 관리할 서버 없음:
+
+```bash
+cd server
+npm i -g wrangler
+wrangler secret put ANTHROPIC_API_KEY   # 키는 시크릿으로만
+wrangler deploy
+# 이후 ai/config.js 의 AI_ENDPOINT 를 *.workers.dev/api/ai 주소로 설정
+```
+
+**무인·절대 안 멈춤 (mock 자동 폴백).** `ai/ai.js` 는 네트워크 오류·비정상 응답·`429 {fallback:true}`
+어느 경우든 브라우저 내 mock 으로 자동 폴백합니다 — 키·예산·네트워크가 없어도 앱이 무인으로 계속
+동작합니다. 홈의 "이번 주말 추천" 자동 다이제스트도 같은 `askAI` 경로를 쓰므로 오프라인에서도 작동합니다.
 
 ## 로컬 실행
 

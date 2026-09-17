@@ -148,6 +148,23 @@ console.log("== 7. AI 보안 게이트 ==");
 // 데모는 반드시 mock 모드 — AI_ENDPOINT 는 빈 문자열이어야 함(브라우저가 백엔드 호출 안 함).
 ok("AI_ENDPOINT 비어 있음(데모=mock)", AI_ENDPOINT === "");
 
+// 무인·저비용 고도화 산출물 존재 확인.
+const serverDir = join(ROOT, "server");
+const serverFiles = new Set(readdirSync(serverDir));
+ok("server/worker.js 존재(Cloudflare Workers 변형)", serverFiles.has("worker.js"));
+ok("server/wrangler.toml 존재", serverFiles.has("wrangler.toml"));
+
+// index.mjs 는 비용 우선 기본 모델 + 캐싱 + 예산 가드레일을 갖춰야 함.
+const idx = readFileSync(join(serverDir, "index.mjs"), "utf8");
+ok("index.mjs 기본 모델 claude-haiku-4-5", /AI_MODEL\s*\|\|\s*['"]claude-haiku-4-5['"]/.test(idx));
+ok("index.mjs prompt caching(ephemeral)", /cache_control/.test(idx) && /ephemeral/.test(idx));
+ok("index.mjs 월 토큰 예산", /AI_MONTHLY_TOKEN_CAP/.test(idx));
+ok("index.mjs 429 fallback", /fallback\s*:\s*true/.test(idx));
+
+// .env 는 반드시 git 제외.
+const gi = readFileSync(join(ROOT, ".gitignore"), "utf8");
+ok(".gitignore 가 .env 제외", /^\.env\b/m.test(gi) || /\n\.env\b/.test("\n" + gi));
+
 // 저장소 어디에도 진짜 Anthropic 키 형식이 없어야 함. (문자열 분할로 이 스캐너 자체는 걸리지 않음)
 const KEY_RE = new RegExp("sk-" + "ant-[A-Za-z0-9_-]{20,}");
 const SKIP_DIRS = new Set(["node_modules", ".git", ".cache", "dist"]);

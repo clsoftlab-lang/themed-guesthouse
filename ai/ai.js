@@ -24,36 +24,52 @@ import { formatKRW } from "../pricing.js";
 export async function askAI(task, payload = {}, { onToken } = {}) {
   if (!AI_ENDPOINT) {
     // ---- 데모(mock) 모드 ----
-    const text = buildMock(task, payload);
-    return streamOut(text, onToken);
+    return streamOut(buildMock(task, payload), onToken);
   }
 
   // ---- 실 연동 모드: 백엔드 프록시로 POST 후 스트리밍 수신 ----
-  const res = await fetch(AI_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ task, payload })
-  });
-  if (!res.ok) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`AI 서버 오류(${res.status}) ${detail}`.trim());
-  }
-  if (!res.body || !res.body.getReader) {
-    // 스트림 미지원 환경 폴백: 전체 텍스트 한 번에.
-    const full = await res.text();
-    onToken?.(full);
+  // 무인(never-breaks): 네트워크 오류·429{fallback}·서버 오류 → mock 으로 자동 폴백.
+  try {
+    const res = await fetch(AI_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ task, payload })
+    });
+
+    // 429 (레이트리밋/월예산 초과 등) → {fallback:true} 신호면 mock 으로.
+    if (res.status === 429) return streamOut(buildMock(task, payload), onToken);
+    if (!res.ok) return streamOut(buildMock(task, payload), onToken);
+
+    if (!res.body || !res.body.getReader) {
+      // 스트림 미지원 환경(예: Cloudflare Worker 비스트리밍 응답): 전체 텍스트 한 번에.
+      const full = await res.text();
+      // 혹시 JSON {fallback:true} 형태로 왔다면 mock 으로.
+      if (looksLikeFallback(full)) return streamOut(buildMock(task, payload), onToken);
+      return streamOut(full, onToken);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let full = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      if (chunk) { full += chunk; onToken?.(chunk); }
+    }
+    if (!full.trim()) return streamOut(buildMock(task, payload), onToken); // 빈 응답도 폴백
     return full;
+  } catch {
+    // 네트워크 실패 등 → 앱이 절대 멈추지 않도록 mock 으로 폴백.
+    return streamOut(buildMock(task, payload), onToken);
   }
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let full = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const chunk = decoder.decode(value, { stream: true });
-    if (chunk) { full += chunk; onToken?.(chunk); }
-  }
-  return full;
+}
+
+/** 비스트리밍 응답이 {fallback:true} JSON 인지 가볍게 판별. */
+function looksLikeFallback(text) {
+  const t = (text || "").trim();
+  if (!t.startsWith("{")) return false;
+  try { return JSON.parse(t).fallback === true; } catch { return false; }
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -91,8 +107,35 @@ function buildMock(task, payload) {
     case "concierge": return mockConcierge(payload);
     case "theme": return mockTheme(payload);
     case "course": return mockCourse(payload);
-    default: return "지원하지 않는 요청이에요. (concierge · theme · course 중 하나를 사용하세요.)";
+    case "weekend": return mockWeekend(payload);
+    default: return "지원하지 않는 요청이에요. (concierge · theme · course · weekend 중 하나를 사용하세요.)";
   }
+}
+
+// (4) 무인 주말 다이제스트 — 온로드 자동 "이번 주말 추천 테마/숙소".
+//     날짜를 시드로 테마를 결정론적으로 회전 → 매 주말 다른 테마를 제안.
+function mockWeekend(payload) {
+  const { themes = [], stays = [], saturday = "", sunday = "" } = payload;
+  if (!themes.length || !stays.length) return "이번 주말 추천을 준비하지 못했어요.";
+
+  const seed = [...String(saturday)].reduce((a, c) => a + c.charCodeAt(0), 0);
+  const theme = themes[seed % themes.length];
+
+  const picks = stays
+    .filter(s => s.theme === theme.id)
+    .sort((a, b) => (b.rating * 20 - b.priceFrom / 10000) - (a.rating * 20 - a.priceFrom / 10000))
+    .slice(0, 3);
+
+  const when = saturday && sunday ? `이번 주말(${saturday} ~ ${sunday})` : "이번 주말";
+  const head = `${theme.emoji} ${when} 추천 테마는 «${theme.name}» 예요. ${theme.blurb}.`;
+
+  const lines = picks.length
+    ? picks.map((s, i) =>
+        `${i + 1}. ${s.name} (${s.region}) — 평점 ${s.rating}/5 · 1박 ${formatKRW(s.priceFrom)}~`).join("\n")
+    : "지금은 이 테마의 추천 숙소가 없어요.";
+
+  return `${head}\n\n${lines}\n\n마음에 드는 곳을 눌러 날짜를 고르면 실시간 요금을 볼 수 있어요.`
+    + `\n⚠️ 데모 모드 — 자동 생성된 추천이며 실제 예약이 아닙니다.`;
 }
 
 /** 텍스트를 정규화한 소문자 토큰 배열로. */

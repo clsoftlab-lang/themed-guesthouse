@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 CLSOFTLAB (씨엘소프트랩), Dr. Lee Il-guk (이일국)
+#
+# Cloudflare Workers 배포 설정 (무료 티어 = 관리할 서버 없음, 무인).
+# 배포:
+#   npm i -g wrangler
+#   wrangler secret put ANTHROPIC_API_KEY   # 키는 시크릿으로만 (저장소·브라우저 금지)
+#   wrangler deploy
+#
+# 배포 후 프론트 ai/config.js 에서:
+#   export const AI_ENDPOINT = "https://themed-guesthouse-ai.<your-subdomain>.workers.dev/api/ai";
+
+name = "themed-guesthouse-ai"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# 선택: 비용 우선 기본값(claude-haiku-4-5)을 상향하려면 주석 해제.
+# [vars]
+# AI_MODEL = "claude-sonnet-5"
+# AI_EFFORT = "low"
+# CORS_ORIGIN = "https://clsoftlab-lang.github.io"
+
+# ⚠️ ANTHROPIC_API_KEY 는 vars 가 아니라 secret 으로만 설정하세요:
+#     wrangler secret put ANTHROPIC_API_KEY

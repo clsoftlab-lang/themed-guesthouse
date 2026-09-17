@@ -30,11 +30,12 @@ inline-SVG galleries, reviews/ratings, and a location schematic.
 
 ## 🤖 AI 기능 (API 연동)
 
-Three AI features, wired into the UI and reusing the app's own stays/themes data:
+Four AI features, wired into the UI and reusing the app's own stays/themes data:
 
 1. **AI 여행 컨시어지 챗봇** (`#/ai`) — recommends stays from region / vibe / budget.
 2. **테마 추천** (`#/ai`) — matches a traveler to one of the 6 themes.
 3. **주변 여행 코스 생성** (stay detail page) — builds a 1-day itinerary for a chosen stay.
+4. **🗓️ 이번 주말 추천 (autonomous)** — the home page auto-generates a "this-weekend" theme + stay pick on load (works offline via the mock).
 
 **Demo = mock (default).** With `AI_ENDPOINT` empty (`ai/config.js`), the front-end answers
 in-browser via a deterministic Korean MockProvider — no network, no key. The AI visibly works
@@ -56,12 +57,45 @@ Then set `ai/config.js`:
 export const AI_ENDPOINT = "http://localhost:8787/api/ai";
 ```
 
-The proxy calls Claude with model **`claude-opus-5`** (`messages.stream`, `max_tokens: 2048`,
-`thinking: { type: "adaptive" }`) and streams the answer back.
+The proxy calls Claude with a **cost-first default model `claude-haiku-4-5`** (configurable via
+`AI_MODEL`), streams the answer back, and applies prompt caching + output caps + a monthly token
+budget. See the 고도화 section below for the full cost model.
 
-> **🔒 Keys are server-side only.** The `ANTHROPIC_API_KEY` lives **only** in `server/` (env var),
-> **never** in the browser, front-end, or repository. `.env` is git-ignored; CI never installs or
-> runs the server. This is the entire reason the proxy exists.
+> **🔒 API keys are server-side only — never in the browser or repo.** The `ANTHROPIC_API_KEY`
+> lives **only** in `server/` (env var) or a Cloudflare Worker secret, **never** in the browser,
+> front-end, or repository. `.env` is git-ignored; CI never installs or runs the server. This is
+> the entire reason the proxy exists.
+
+## ⚙️ 고도화 — 무인·저비용 실 AI 연동
+
+This upgrade makes the real-AI path **cost-efficient** and **unmanned (무인)**.
+
+**Cost model.** Default model **`claude-haiku-4-5`** at **$1 / $5 per MTok** (input / output),
+raisable via `AI_MODEL` to `claude-sonnet-5` or `claude-opus-5` for higher quality. Each stable
+per-task system prompt is sent as a `cache_control:{type:'ephemeral'}` block, so repeated calls
+read the cache and cost less. Per-task `max_tokens` is modest (~700). A monthly token budget
+(`AI_MONTHLY_TOKEN_CAP`, default 2,000,000) plus a per-IP rate limit (default 20/min) guard spend;
+when either is exceeded the proxy returns HTTP 429 `{fallback:true}`.
+
+**Rough cost estimate.** On Haiku 4.5, a typical request (~2K input + ~0.5K output tokens) costs
+about **$0.0045**, i.e. **~$4–5 per 1,000 requests** before caching discounts — and the mock path
+is **$0**. The default 2M-token monthly cap keeps a runaway from ever surprising you.
+
+**Free one-deploy (Cloudflare Workers, 무인).** `server/worker.js` + `server/wrangler.toml` call
+the Anthropic REST API with the same task routing, model, and caching rules — no server to babysit:
+
+```bash
+cd server
+npm i -g wrangler
+wrangler secret put ANTHROPIC_API_KEY   # key as a secret only
+wrangler deploy
+# then point ai/config.js AI_ENDPOINT at the *.workers.dev/api/ai URL
+```
+
+**Autonomous, never-breaks (무인 mock-fallback).** `ai/ai.js` auto-falls back to the in-browser
+mock on any network error, non-OK response, or `429 {fallback:true}` — so the app keeps working
+unmanned even if the key, budget, or network is unavailable. The autonomous "이번 주말 추천"
+digest on the home page runs through this same `askAI` path, so it works offline too.
 
 ## Run locally
 
@@ -94,7 +128,7 @@ CI runs the same via `.github/workflows/ci.yml`.
 - `index.html`, `styles.css`
 - `app.js` (router/views) + modules: `pricing.js` (pure engine), `svg.js` (inline art), `store.js` (localStorage)
 - `ai/config.js` (`AI_ENDPOINT`), `ai/ai.js` (`askAI` + MockProvider) — pluggable AI-KIT
-- `server/index.mjs`, `server/package.json`, `server/.env.example`, `server/README.md` — real-Claude proxy
+- `server/index.mjs` (Node proxy), `server/worker.js` + `server/wrangler.toml` (Cloudflare Workers variant), `server/package.json`, `server/.env.example`, `server/README.md` — real-Claude proxy
 - `data/stays.json`, `data/themes.json`, `data/pricing.json`
 - `check.mjs`, `.github/workflows/ci.yml`
 - `README.md`, `README.ko.md`, `LICENSE`, `.gitignore`

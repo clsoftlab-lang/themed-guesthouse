@@ -20,6 +20,16 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const byId = id => state.stays.find(s => s.id === id);
 const todayPlus = d => { const t = new Date(Date.now() + d * 86400000); return t.toISOString().slice(0, 10); };
+// 다가오는(또는 진행 중인) 주말의 토·일 날짜(YYYY-MM-DD). 무인 주말 다이제스트용.
+function upcomingWeekend() {
+  const now = new Date();
+  const dow = now.getDay();               // 0=일 … 6=토
+  const toSat = (6 - dow + 7) % 7;        // 다음 토요일까지 남은 일수(오늘이 토=0)
+  const sat = new Date(now.getTime() + toSat * 86400000);
+  const sun = new Date(sat.getTime() + 86400000);
+  const fmt = d => d.toISOString().slice(0, 10);
+  return { saturday: fmt(sat), sunday: fmt(sun) };
+}
 
 function toast(msg) {
   let t = $("#toast");
@@ -91,6 +101,13 @@ function viewList() {
     </div>
   </section>
 
+  <section class="ai-panel weekend-digest" aria-label="이번 주말 추천">
+    <h2>🗓️ 이번 주말 추천 숙소·테마</h2>
+    <p class="muted">앱을 열면 다가오는 주말에 어울리는 테마와 숙소를 AI 가 자동으로 골라 드려요.</p>
+    <div class="ai-output" id="weekendOut" role="status" aria-live="polite">추천을 준비하는 중…</div>
+    <p class="ai-note">🤖 데모 모드에서는 기기 안에서 즉시 생성됩니다 (외부 전송·키 없음).</p>
+  </section>
+
   <form class="filters" id="filters" aria-label="숙소 필터">
     <input type="search" name="q" placeholder="숙소·지역·편의시설 검색" value="${esc(f.q)}" aria-label="검색">
     <select name="region" aria-label="지역"><option value="">전체 지역</option>
@@ -120,6 +137,18 @@ function viewList() {
   };
   form.addEventListener("input", update);
   form.addEventListener("submit", e => { e.preventDefault(); update(); });
+
+  // 무인 자동 기능: 온로드 "이번 주말 추천 숙소·테마" (mock 오프라인에서도 동작).
+  const weekendOut = $("#weekendOut");
+  if (weekendOut) {
+    const { saturday, sunday } = upcomingWeekend();
+    runAI({
+      task: "weekend",
+      payload: { saturday, sunday, themes: state.themes, stays: state.stays },
+      outEl: weekendOut,
+      loadingText: "추천을 준비하는 중…"
+    });
+  }
 }
 
 function cardHTML(s) {
