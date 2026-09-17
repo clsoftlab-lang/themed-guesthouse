@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: Apache-2.0
+  Copyright 2026 CLSOFTLAB (씨엘소프트랩), Dr. Lee Il-guk (이일국)
+-->
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="테마 게스트하우스 — 루프탑 온천·감성 카페·파티·반려동물·여성전용 테마 숙소 예약 데모 (데모 모드)">
+  <title>테마 게스트하우스 · 테마 숙소 예약</title>
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%A1%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/">🏡 테마 게스트하우스</a>
+    <nav class="mainnav">
+      <a data-nav="" href="#/">탐색</a>
+      <a data-nav="curation" href="#/curation">큐레이션</a>
+      <a data-nav="wishlist" href="#/wishlist">위시리스트 <span id="wishCount" class="count"></span></a>
+      <a data-nav="bookings" href="#/bookings">내 예약 <span id="bookCount" class="count"></span></a>
+    </nav>
+  </header>
+
+  <main id="app" class="container">
+    <p class="empty">불러오는 중…</p>
+  </main>
+
+  <footer class="site-footer">
+    <p><b>데모 모드</b> — 가상의 숙소, 모의 결제, localStorage 저장(실제 DB 아님), 계정·개인정보 없음.</p>
+    <p>© 2026 CLSOFTLAB (씨엘소프트랩), Dr. Lee Il-guk (이일국) · Apache-2.0 · Not an official Anthropic product.</p>
+  </footer>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "currency": "KRW",
+  "cleaningFee": 15000,
+  "weekendSurchargePct": 15,
+  "peakSurchargePct": 25,
+  "peakPeriods": [
+    {
+      "from": "2026-07-15",
+      "to": "2026-08-20",
+      "label": "여름 성수기"
+    },
+    {
+      "from": "2026-12-20",
+      "to": "2027-01-02",
+      "label": "연말 성수기"
+    }
+  ],
+  "serviceFeePct": 5
+}
