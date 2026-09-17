@@ -8,6 +8,7 @@
 import { quote, checkAvailability, formatKRW, nightsBetween } from "./pricing.js";
 import { heroSVG, gallerySVGs, locationSVG, starsSVG } from "./svg.js";
 import * as store from "./store.js";
+import { askAI } from "./ai/ai.js";
 
 const app = document.getElementById("app");
 const state = { stays: [], themes: [], pricing: null, loaded: false };
@@ -170,6 +171,14 @@ function viewStay(id) {
     <ul class="landmarks">${(s.location.landmarks || []).map(l => `<li>📌 ${esc(l)}</li>`).join("")}</ul>
   </section>
 
+  <section class="ai-course ai-panel">
+    <h3>🗺️ AI 주변 여행 코스</h3>
+    <p class="muted">이 숙소를 기준으로 하루 여행 코스를 AI 가 만들어 드려요.</p>
+    <button class="btn" id="courseBtn">코스 생성하기</button>
+    <div class="ai-output" id="courseOut" hidden></div>
+    <p class="ai-note">🤖 데모 모드에서는 기기 안에서 즉시 생성됩니다 (외부 전송·키 없음).</p>
+  </section>
+
   <section class="reviews">
     <h3>리뷰 ${s.reviewCount}개 · 평균 ${s.rating}점</h3>
     ${s.reviews.map(rv => `<div class="review"><div class="rv-head"><b>${esc(rv.author)}</b> ${starsSVG(rv.rating)} <span class="rv-date">${esc(rv.date)}</span></div><p>${esc(rv.text)}</p></div>`).join("")}
@@ -180,6 +189,110 @@ function viewStay(id) {
     $("#galMain").innerHTML = gallery[i];
     app.querySelectorAll(".thumb").forEach(b => b.classList.toggle("on", b === btn));
   }));
+
+  const courseBtn = $("#courseBtn"), courseOut = $("#courseOut");
+  courseBtn.addEventListener("click", () => runAI({
+    task: "course",
+    payload: { stay: s },
+    outEl: courseOut,
+    btn: courseBtn,
+    loadingText: "코스 생성 중…"
+  }));
+}
+
+// ---------- AI 실행 공통 헬퍼 ----------
+// askAI 를 호출하고 결과를 스트리밍 표시. 데모(mock)/실연동 모두 동일 코드로 동작.
+async function runAI({ task, payload, outEl, btn, loadingText }) {
+  outEl.hidden = false;
+  outEl.textContent = "";
+  outEl.classList.add("streaming");
+  const prevLabel = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = loadingText || "생성 중…"; }
+  try {
+    await askAI(task, payload, { onToken: chunk => { outEl.textContent += chunk; } });
+  } catch (err) {
+    outEl.textContent = "AI 요청에 실패했어요: " + (err && err.message ? err.message : String(err))
+      + "\n(실 연동 모드라면 server/ 프록시가 실행 중인지 확인하세요.)";
+  } finally {
+    outEl.classList.remove("streaming");
+    if (btn) { btn.disabled = false; btn.textContent = prevLabel; }
+  }
+}
+
+// ---------- 뷰: AI 도우미 (챗봇 + 테마 추천) ----------
+function viewAI() {
+  const cities = [...new Set(state.stays.map(s => s.city))];
+  app.innerHTML = `
+  <a class="back" href="#/">← 목록으로</a>
+  <h1>🤖 AI 여행 도우미</h1>
+  <p class="muted">앱의 실제 숙소·테마 데이터를 근거로 추천해 드려요. 데모 모드에서는 기기 안에서 즉시 동작하며, 외부 전송이나 API 키가 전혀 없습니다.</p>
+
+  <section class="ai-panel">
+    <h2>💬 AI 여행 컨시어지</h2>
+    <p class="muted">지역·분위기·예산을 알려주시면 어울리는 숙소를 추천해 드려요.</p>
+    <form id="conciergeForm" class="ai-form">
+      <select name="region" aria-label="지역"><option value="">지역 무관</option>
+        ${cities.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join("")}</select>
+      <input type="text" name="vibe" placeholder="분위기·키워드 (예: 온천 힐링, 친구랑 파티)" aria-label="분위기">
+      <input type="number" name="budget" min="0" step="10000" placeholder="1박 예산(원) — 선택" aria-label="예산">
+      <input type="text" name="query" placeholder="자유롭게 더 적어주세요 (선택)" aria-label="추가 요청">
+      <button class="btn primary" type="submit">추천 받기</button>
+    </form>
+    <div class="ai-output" id="conciergeOut" hidden></div>
+  </section>
+
+  <section class="ai-panel">
+    <h2>🎯 나에게 맞는 테마 추천</h2>
+    <p class="muted">여행 성향을 알려주시면 6개 테마 중 가장 잘 맞는 하나를 골라 드려요.</p>
+    <form id="themeForm" class="ai-form">
+      <input type="text" name="vibe" placeholder="여행 성향 (예: 조용한 카페, 바다 서핑, 반려견 동반)" aria-label="여행 성향" required>
+      <button class="btn primary" type="submit">테마 찾기</button>
+    </form>
+    <div class="theme-quick">
+      ${state.themes.map(t => `<button class="chip" type="button" data-vibe="${esc(t.name)}">${t.emoji} ${esc(t.name)}</button>`).join("")}
+    </div>
+    <div class="ai-output" id="themeOut" hidden></div>
+  </section>
+
+  <p class="ai-note">🤖 실제 Claude 연동을 켜려면 <code>server/</code> 프록시를 띄우고 <code>ai/config.js</code> 의 <code>AI_ENDPOINT</code> 를 설정하세요. API 키는 서버에서만 다룹니다.</p>`;
+
+  const cForm = $("#conciergeForm"), cOut = $("#conciergeOut");
+  cForm.addEventListener("submit", e => {
+    e.preventDefault();
+    const fd = new FormData(cForm);
+    runAI({
+      task: "concierge",
+      payload: {
+        region: fd.get("region") || "",
+        vibe: fd.get("vibe") || "",
+        budget: Number(fd.get("budget")) || 0,
+        query: fd.get("query") || "",
+        stays: state.stays,
+        themes: state.themes
+      },
+      outEl: cOut,
+      btn: cForm.querySelector("button[type=submit]"),
+      loadingText: "추천 찾는 중…"
+    });
+  });
+
+  const tForm = $("#themeForm"), tOut = $("#themeOut");
+  const runTheme = vibe => runAI({
+    task: "theme",
+    payload: { vibe, themes: state.themes, stays: state.stays },
+    outEl: tOut,
+    btn: tForm.querySelector("button[type=submit]"),
+    loadingText: "테마 찾는 중…"
+  });
+  tForm.addEventListener("submit", e => {
+    e.preventDefault();
+    runTheme(tForm.querySelector("[name=vibe]").value || "");
+  });
+  app.querySelectorAll(".theme-quick [data-vibe]").forEach(btn =>
+    btn.addEventListener("click", () => {
+      tForm.querySelector("[name=vibe]").value = btn.dataset.vibe;
+      runTheme(btn.dataset.vibe);
+    }));
 }
 
 function roomRow(s, r) {
@@ -321,6 +434,7 @@ function router() {
   if (parts[0] === "bookings") return viewBookings();
   if (parts[0] === "wishlist") return viewWishlist();
   if (parts[0] === "curation") return viewCuration();
+  if (parts[0] === "ai") return viewAI();
   return viewNotFound();
 }
 

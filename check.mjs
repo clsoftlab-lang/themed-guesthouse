@@ -15,6 +15,7 @@ import { dirname, join } from "node:path";
 import {
   quote, checkAvailability, nightsBetween, isWeekend, isPeak, eachNight, formatKRW
 } from "./pricing.js";
+import { AI_ENDPOINT } from "./ai/config.js";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 let pass = 0, fail = 0;
@@ -129,6 +130,41 @@ ok("가용성 체크아웃 경계 비겹침", a5.remaining === 3);
 
 // 포맷
 ok("formatKRW", formatKRW(1234000) === "1,234,000원");
+
+console.log("== 6. AI-KIT node --check (ai/ + server/) ==");
+for (const dir of ["ai", "server"]) {
+  const abs = join(ROOT, dir);
+  let files = [];
+  try { files = readdirSync(abs).filter(f => f.endsWith(".js") || f.endsWith(".mjs")); }
+  catch { ok(`${dir}/ 디렉터리 존재`, false); continue; }
+  ok(`${dir}/ JS 파일 존재`, files.length > 0);
+  for (const f of files) {
+    try { execFileSync(process.execPath, ["--check", join(abs, f)], { stdio: "pipe" }); ok(`--check ${dir}/${f}`, true); }
+    catch (e) { ok(`--check ${dir}/${f}`, false); console.error(String(e.stderr || e)); }
+  }
+}
+
+console.log("== 7. AI 보안 게이트 ==");
+// 데모는 반드시 mock 모드 — AI_ENDPOINT 는 빈 문자열이어야 함(브라우저가 백엔드 호출 안 함).
+ok("AI_ENDPOINT 비어 있음(데모=mock)", AI_ENDPOINT === "");
+
+// 저장소 어디에도 진짜 Anthropic 키 형식이 없어야 함. (문자열 분할로 이 스캐너 자체는 걸리지 않음)
+const KEY_RE = new RegExp("sk-" + "ant-[A-Za-z0-9_-]{20,}");
+const SKIP_DIRS = new Set(["node_modules", ".git", ".cache", "dist"]);
+const SCAN_EXT = /\.(js|mjs|json|md|html|css|example|txt|yml|yaml)$/i;
+function walk(dir) {
+  let out = [];
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) out = out.concat(walk(join(dir, e.name))); }
+    else if (SCAN_EXT.test(e.name)) out.push(join(dir, e.name));
+  }
+  return out;
+}
+let leaked = [];
+for (const f of walk(ROOT)) {
+  try { if (KEY_RE.test(readFileSync(f, "utf8"))) leaked.push(f); } catch { /* ignore */ }
+}
+ok(`실제 API 키 미노출 (스캔 ${leaked.length ? "발견: " + leaked.join(", ") : "clean"})`, leaked.length === 0);
 
 console.log(`\n결과: ${pass} 통과 / ${fail} 실패`);
 if (fail > 0) process.exit(1);

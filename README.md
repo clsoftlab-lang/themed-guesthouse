@@ -28,6 +28,41 @@ inline-SVG galleries, reviews/ratings, and a location schematic.
 - **내 예약 / 위시리스트 / 테마별 큐레이션** — persisted in `localStorage`.
 - **반응형 + 라이트/다크** via `prefers-color-scheme`; Korean UI; inline-SVG art only (no binaries).
 
+## 🤖 AI 기능 (API 연동)
+
+Three AI features, wired into the UI and reusing the app's own stays/themes data:
+
+1. **AI 여행 컨시어지 챗봇** (`#/ai`) — recommends stays from region / vibe / budget.
+2. **테마 추천** (`#/ai`) — matches a traveler to one of the 6 themes.
+3. **주변 여행 코스 생성** (stay detail page) — builds a 1-day itinerary for a chosen stay.
+
+**Demo = mock (default).** With `AI_ENDPOINT` empty (`ai/config.js`), the front-end answers
+in-browser via a deterministic Korean MockProvider — no network, no key. The AI visibly works
+out of the box.
+
+**Enable real Claude:** run the backend proxy in [`server/`](./server/README.md), then point the
+front-end at it:
+
+```bash
+cd server
+npm install                 # @anthropic-ai/sdk
+cp .env.example .env        # put your real ANTHROPIC_API_KEY here
+npm run dev                 # starts http://localhost:8787
+```
+
+Then set `ai/config.js`:
+
+```js
+export const AI_ENDPOINT = "http://localhost:8787/api/ai";
+```
+
+The proxy calls Claude with model **`claude-opus-5`** (`messages.stream`, `max_tokens: 2048`,
+`thinking: { type: "adaptive" }`) and streams the answer back.
+
+> **🔒 Keys are server-side only.** The `ANTHROPIC_API_KEY` lives **only** in `server/` (env var),
+> **never** in the browser, front-end, or repository. `.env` is git-ignored; CI never installs or
+> runs the server. This is the entire reason the proxy exists.
+
 ## Run locally
 
 ```bash
@@ -58,6 +93,8 @@ CI runs the same via `.github/workflows/ci.yml`.
 
 - `index.html`, `styles.css`
 - `app.js` (router/views) + modules: `pricing.js` (pure engine), `svg.js` (inline art), `store.js` (localStorage)
+- `ai/config.js` (`AI_ENDPOINT`), `ai/ai.js` (`askAI` + MockProvider) — pluggable AI-KIT
+- `server/index.mjs`, `server/package.json`, `server/.env.example`, `server/README.md` — real-Claude proxy
 - `data/stays.json`, `data/themes.json`, `data/pricing.json`
 - `check.mjs`, `.github/workflows/ci.yml`
 - `README.md`, `README.ko.md`, `LICENSE`, `.gitignore`

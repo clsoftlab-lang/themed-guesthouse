@@ -1,0 +1,19 @@
+{
+  "name": "themed-guesthouse-ai-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "테마 게스트하우스 — 실 Claude 연동용 백엔드 AI 프록시 (API 키는 서버에서만 처리)",
+  "license": "Apache-2.0",
+  "main": "index.mjs",
+  "scripts": {
+    "start": "node index.mjs",
+    "dev": "node --env-file=.env index.mjs"
+  },
+  "engines": {
+    "node": ">=20.6.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0"
+  }
+}

@@ -1,6 +1,11 @@
 # Dependencies
 node_modules/
 
+# Secrets — API 키가 담긴 .env 는 절대 커밋 금지
+.env
+*.env
+!*.env.example
+
 # Logs
 *.log
 npm-debug.log*

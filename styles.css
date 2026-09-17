@@ -167,3 +167,17 @@ fieldset input, fieldset select { display: block; width: 100%; margin-top: .25re
   font-size: .9rem; opacity: 0; pointer-events: none; transition: all .25s ease; z-index: 50;
 }
 #toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* AI 도우미 (AI-KIT) */
+.ai-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.1rem 1.2rem; margin: 1rem 0; box-shadow: var(--shadow); }
+.ai-panel h2 { margin-top: 0; }
+.ai-form { display: flex; flex-wrap: wrap; gap: .6rem; margin: .6rem 0; }
+.ai-form input, .ai-form select { flex: 1 1 12rem; padding: .55rem .7rem; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); color: var(--text); font: inherit; }
+.ai-form button { flex: 0 0 auto; }
+.theme-quick { display: flex; flex-wrap: wrap; gap: .5rem; margin: .4rem 0 .2rem; }
+.ai-output { white-space: pre-wrap; word-break: break-word; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: .9rem 1rem; margin-top: .8rem; font-size: .92rem; line-height: 1.6; min-height: 2.5rem; }
+.ai-output.streaming::after { content: "▍"; color: var(--brand); animation: ai-blink 1s steps(2) infinite; }
+@keyframes ai-blink { 50% { opacity: 0; } }
+.ai-note { font-size: .8rem; color: var(--muted); margin-top: .8rem; }
+.ai-note code { background: var(--surface-2); padding: .1rem .35rem; border-radius: 6px; font-size: .92em; }
+.ai-course { margin-top: 1.5rem; }

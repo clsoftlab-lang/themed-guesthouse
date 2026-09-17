@@ -19,6 +19,39 @@ HTML + CSS + ES 모듈 자바스크립트로 만들었고, GitHub Pages 에 그�
 - **내 예약 / 위시리스트 / 테마별 큐레이션** — `localStorage` 저장.
 - **반응형 + 라이트/다크**(`prefers-color-scheme`), 한국어 UI, 인라인 SVG 아트만 사용(바이너리 없음).
 
+## 🤖 AI 기능 (API 연동)
+
+앱의 실제 숙소·테마 데이터를 재사용하는 AI 기능 3종을 UI 에 연결했습니다:
+
+1. **AI 여행 컨시어지 챗봇** (`#/ai`) — 지역·분위기·예산으로 숙소 추천.
+2. **테마 추천** (`#/ai`) — 여행 성향을 6개 테마 중 하나로 매칭.
+3. **주변 여행 코스 생성** (숙소 상세 페이지) — 선택한 숙소 기준 1일 여행 코스 생성.
+
+**데모 = mock (기본값).** `ai/config.js` 의 `AI_ENDPOINT` 가 비어 있으면, 프론트가 브라우저 안에서
+결정론적 한국어 MockProvider 로 답합니다 — 네트워크·API 키 전혀 없음. 별도 설정 없이 AI 가 바로 동작합니다.
+
+**실제 Claude 켜기:** [`server/`](./server/README.md) 백엔드 프록시를 띄운 뒤 프론트가 그 주소를 보게 합니다.
+
+```bash
+cd server
+npm install                 # @anthropic-ai/sdk
+cp .env.example .env        # .env 에 실제 ANTHROPIC_API_KEY 입력
+npm run dev                 # http://localhost:8787 실행
+```
+
+그다음 `ai/config.js`:
+
+```js
+export const AI_ENDPOINT = "http://localhost:8787/api/ai";
+```
+
+프록시는 모델 **`claude-opus-5`** (`messages.stream`, `max_tokens: 2048`,
+`thinking: { type: "adaptive" }`) 로 호출하고 응답을 스트리밍합니다.
+
+> **🔒 API 키는 서버에서만.** `ANTHROPIC_API_KEY` 는 **오직** `server/` 백엔드(환경변수)에만 두며,
+> 브라우저·프론트엔드·저장소에는 **절대** 넣지 않습니다. `.env` 는 git 제외 처리되고, CI 는 서버를
+> 설치·실행하지 않습니다. 프록시가 존재하는 이유가 바로 이것입니다.
+
 ## 로컬 실행
 
 ```bash
